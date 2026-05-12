@@ -1,11 +1,13 @@
+import os
+from dotenv import load_dotenv
 from openai import OpenAI
 from memory import Memory
+
+load_dotenv()
+main_prompt = str(os.getenv("PROMPT"))
+
 client = OpenAI(base_url="http://localhost:1234/v1", api_key="placeholder")
-character = {"role": "system", "content": """
-You are an AI companion. 
-You will be given messages from users and you should respond to them in a helpful and concise manner. 
-If the user asks you to do something that is not possible, you should politely decline.
-You should try to speak in the same manner that the user does, to replicate how a human would interact with another human."""}
+character = {"role": "system", "content": main_prompt}
 messages = []
 messages.append(character)
 memory = Memory()
@@ -22,20 +24,23 @@ class llm:
         self.messages = messages
     async def ask(self, statement = str, author = str):
         print(f"received message: {statement}")
+        past_semantic, past_episodic = memory.retrieve_memories(query = statement)
 
-        content = client.chat.completions.create(
-            model = "local",
-            messages=[{"role": "system", "content": f"""You are forming semantic memories. Extract only facts from what the user says. Format: "[username] fact about them".
-            Example: "[alice] likes dogs and has a dog named Brownie" 
+        # content = client.chat.completions.create(
+        #     model = "local",
+        #     messages=[{"role": "system", "content": f"""You are forming semantic memories. You will be given a line that the user said to you.
+        #                Extract only facts from what the user says. Format: "[username] fact about them".
+        #                Example: "[alice] likes dogs and has a dog named Brownie" 
+        #                Example: "I am an AI on Discord."
                        
-            Extract facts from this user's message:
-            User: {author}
-            Message: {statement}"""}],
-            temperature = 0
-        )
-        print(f"DEBUG: {content.choices[0].message.content}")
-        past_semantic = memory.retrieve_memories(query = content.choices[0].message.content, type = "semantic")
-        past_episodic = memory.retrieve_memories(query = content.choices[0].message.content, type = "episodic")
+        #                Here is the line:
+        #                User: {author}
+        #                Message: {statement}"""}],
+        #     temperature = 0
+        # )
+        # content_text = content.choices[0].message.content
+        # past_semantic = memory.retrieve_memories(query = content_text, type = "semantic")
+        # past_episodic = memory.retrieve_memories(query = content_text, type = "episodic")
         #experiment: mix semantic and episodic vs list them separately
         context = messages.copy()
         if past_semantic or past_episodic:
@@ -57,7 +62,7 @@ class llm:
         print(f"DEBUG relevant memories episodic: {past_episodic}")
         self.messages.append({"role": "assistant", "content": answer})
         print(f"DEBUG output: {answer} ")
-        memory.save_semantic_memory(content.choices[0].message.content)
+        memory.save_semantic_memory(content_text, user = author)
         return answer
     async def form_episodic_memory(self):
         prompt =[]
@@ -66,7 +71,10 @@ class llm:
             You will be given a past section of a conversation, 
             and your task is to create the episodic memory that will be recalled for future use. Summaries should be concise, output ONLY the memory
             Keep episodic memories to 1-3 sentences. You can describe emotions, tone, and personality traits, but don't pad it with irrelevant details.
+            Dialogue marked with "role": "assistant" are the responses you gave, and "role": "user" are the messages from the user.
             Example: "[alice] and I talked about our day and we got along well."
+            Example: "I found out that [bob] is my creator and I am grateful for that."
+            
                         
             
             Here is the conversation segment: {self.messages[-10:]}"""})
@@ -75,5 +83,4 @@ class llm:
             messages = prompt,
             temperature = 0 #idea: change the temperature based on mood
         )
-        print(f"DEBUG created episodic memory: {episode.choices[0].message.content}")
         memory.save_episodic_memory(episode.choices[0].message.content)

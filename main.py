@@ -35,13 +35,12 @@ class Client(commands.Bot):
                 await attachment.save(f"downloads/{attachment.filename}")
                 print(f"Saved attachment: {attachment.filename}")
         if message.author == self.user:
-            print("DEBUG: I responded")
             return
         if self.message_count >= 10:
             self.message_count = 0
             await llm_instance.form_episodic_memory()
         print(f"{message.author} says: {message.content}")
-        await asyncio.sleep(random.normalvariate(mu = len(message.content) / 3, sigma = 1))
+        await asyncio.sleep(random.normalvariate(mu = len(message.content) / 6, sigma = len(message.content) / 30))
         async with message.channel.typing():
             answer = await llm_instance.ask(statement = message.content, author = message.author.name)
             await asyncio.sleep(random.normalvariate(mu = len(answer) / 15, sigma = 1))
