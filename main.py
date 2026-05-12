@@ -30,14 +30,13 @@ class Client(commands.Bot):
 
     async def on_message(self, message):
         self.message_count += 1
+        if message.author == self.user:
+            return
         if message.attachments:
             print("detected attachments")
             for attachment in message.attachments:
                 await attachment.save(f"downloads/{attachment.filename}")
                 print(f"Saved attachment: {attachment.filename}")
-        if message.author == self.user:
-            return
-        
         # Load past messages on first user message
         if not self.past_messages_loaded:
             await llm_instance.load_past_discord_messages(message.channel)

@@ -46,21 +46,20 @@ class llm:
             print(f"Error loading past messages: {e}")
     async def ask(self, statement = str, author = str):
         print(f"received message: {statement}")
-        past_semantic, past_episodic = memory.retrieve_memories(query = statement)
-
-        # content = client.chat.completions.create(
-        #     model = "local",
-        #     messages=[{"role": "system", "content": f"""You are forming semantic memories. You will be given a line that the user said to you.
-        #                Extract only facts from what the user says. Format: "[username] fact about them".
-        #                Example: "[alice] likes dogs and has a dog named Brownie" 
-        #                Example: "I am an AI on Discord."
+        content = client.chat.completions.create(
+            model = "local",
+            messages=[{"role": "system", "content": f"""You are forming semantic memories. You will be given a line that the user said to you.
+                       Extract only facts from what the user says. Format: "[username] fact about them".
+                       Example: "[alice] likes dogs and has a dog named Brownie" 
+                       Example: "I am an AI on Discord."
                        
-        #                Here is the line:
-        #                User: {author}
-        #                Message: {statement}"""}],
-        #     temperature = 0
-        # )
-        # content_text = content.choices[0].message.content
+                       Here is the line:
+                       User: {author}
+                       Message: {statement}"""}],
+            temperature = 0
+        )
+        content_text = content.choices[0].message.content
+        past_semantic, past_episodic = memory.retrieve_memories(query = statement, n = 20, threshold = 0.5)
         # past_semantic = memory.retrieve_memories(query = content_text, type = "semantic")
         # past_episodic = memory.retrieve_memories(query = content_text, type = "episodic")
         #experiment: mix semantic and episodic vs list them separately

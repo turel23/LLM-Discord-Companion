@@ -5,6 +5,7 @@ class Memory:
         self.client = chromadb.PersistentClient(path = "./memories")
         self.semantic = self.client.get_or_create_collection(name = "semantic_memories")
         self.episodic = self.client.get_or_create_collection(name = "episodic_memories")
+    
     def save_semantic_memory(self, memory, user = str, topic = str):
         lines = memory.split("\n")
         for line in lines:
@@ -39,14 +40,25 @@ class Memory:
     #             n_results = n
     #         )
     #     return results['documents'][0] if results["documents"] else []
-    def retrieve_memories(self, query = str):
+    def retrieve_memories(self, query = str, n = int, threshold = int):
         query_list = [query] if isinstance(query, str) else query
         semantic_results = self.semantic.query(
             query_texts = query_list,
-            n_results = 10
+            n_results = n
         )
         episodic_results = self.episodic.query(
             query_texts = query_list,
-            n_results = 10
+            n_results = n
         )
-        return semantic_results['documents'][0] if semantic_results["documents"] else [], episodic_results['documents'][0] if episodic_results["documents"] else []
+        relevant_semantic = []
+        relevant_episodic = []
+        for doc, distance in zip(semantic_results['documents'][0], semantic_results['distances'][0]):
+            similarity = 1 - distance
+            if similarity >= threshold:
+                relevant_semantic.append(doc)
+
+        for doc, distance in zip(episodic_results['documents'][0], episodic_results['distances'][0]):
+            similarity = 1 - distance
+            if similarity >= threshold:
+                relevant_episodic.append(doc)
+        return relevant_semantic, relevant_episodic
