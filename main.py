@@ -7,11 +7,16 @@ from llm import llm
 import random
 import asyncio
 
+load_dotenv()
+
 # Create an instance of the llm class
 llm_instance = llm()
-track_message = 0
 
 class Client(commands.Bot):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.message_count = 0
+
     async def on_ready(self):
         print(f"logged on as {self.user}!")
         try:
@@ -23,7 +28,7 @@ class Client(commands.Bot):
             print(f"Error syncing commands: {e}")
 
     async def on_message(self, message):
-        track_message += 1
+        self.message_count += 1
         if message.attachments:
             print("detected attachments")
             for attachment in message.attachments:
@@ -32,16 +37,16 @@ class Client(commands.Bot):
         if message.author == self.user:
             print("DEBUG: I responded")
             return
-        if track_message >= 10:
-            track_message = 0
-            llm_instance.save_episodic_memory()
+        if self.message_count >= 10:
+            self.message_count = 0
+            await llm_instance.form_episodic_memory()
         print(f"{message.author} says: {message.content}")
         await asyncio.sleep(random.normalvariate(mu = len(message.content) / 3, sigma = 1))
         async with message.channel.typing():
-            answer = await llm_instance.ask(message.content, author = message.author.name)
+            answer = await llm_instance.ask(statement = message.content, author = message.author.name)
             await asyncio.sleep(random.normalvariate(mu = len(answer) / 15, sigma = 1))
             await message.channel.send(answer)
-            track_message += 1
+            self.message_count += 1
 
 
 intents = discord.Intents.default()

@@ -10,7 +10,7 @@ class Memory:
         self.semantic.add(
             documents = [memory],
             ids = [memory_id],
-            metadatas = [{"timestamp": str(datatime.now())}]
+            metadatas = [{"timestamp": str(datetime.now())}]
         )
         print("Saved semantic memory: ", memory)
     def save_episodic_memory(self, memory):
@@ -18,10 +18,10 @@ class Memory:
         self.episodic.add(
             documents = [memory],
             ids = [memory_id],
-            metadatas = [{"timestamp": str(datatime.now())}]
+            metadatas = [{"timestamp": str(datetime.now())}]
         )
         print("Saved episodic memory: ", memory)
-    def retrieve_memories(self, query = query, n = 10, type = type):
+    def retrieve_memories(self, query = str, n = 10, type = str):
         if type == "semantic":
             results = self.semantic.query(
                 query_texts = [query],
@@ -32,4 +32,4 @@ class Memory:
                 query_texts = [query],
                 n_results = n
             )
-        return results['documents'] if result["documents"] else []
+        return results['documents'][0] if results["documents"] else []
