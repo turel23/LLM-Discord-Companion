@@ -20,6 +20,28 @@ class llm:
     def __init__(self):
         self.client = client
         self.messages = messages
+    
+    async def load_past_discord_messages(self, channel):
+        """Load the past 15 messages from Discord channel and append to messages"""
+        try:
+            past_messages = []
+            async for message in channel.history(limit=15):
+                past_messages.append(message)
+            
+            # Reverse to get chronological order (oldest first)
+            past_messages.reverse()
+            
+            for msg in past_messages:
+                if msg.author.bot:
+                    # AI response
+                    self.messages.append({"role": "assistant", "content": msg.content})
+                else:
+                    # User message
+                    self.messages.append({"role": "user", "name": msg.author.name.replace(" ", "_"), "content": f"[{msg.author.name}]: {msg.content}"})
+            
+            print(f"Loaded {len(past_messages)} past messages from Discord")
+        except Exception as e:
+            print(f"Error loading past messages: {e}")
     async def ask(self, statement = str, author = str):
         print(f"received message: {statement}")
 

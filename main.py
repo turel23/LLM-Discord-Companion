@@ -16,6 +16,7 @@ class Client(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.message_count = 0
+        self.past_messages_loaded = False
 
     async def on_ready(self):
         print(f"logged on as {self.user}!")
@@ -37,6 +38,12 @@ class Client(commands.Bot):
         if message.author == self.user:
             print("DEBUG: I responded")
             return
+        
+        # Load past messages on first user message
+        if not self.past_messages_loaded:
+            await llm_instance.load_past_discord_messages(message.channel)
+            self.past_messages_loaded = True
+        
         if self.message_count >= 10:
             self.message_count = 0
             await llm_instance.form_episodic_memory()
