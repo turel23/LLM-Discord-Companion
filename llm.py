@@ -56,16 +56,17 @@ class llm:
         print(f"received message: {statement}")
         content = client.chat.completions.create(
             model = "local",
-            messages=[{"role": "system", "content": f"""You are extracting facts about the user, who is talking to you, so when they say "you" they mean you. 
+            messages=[{"role": "system", "content": f"""Today is {datetime.now().strftime('%A, %B %d, %Y')}. You are extracting facts about the user, who is talking to you, so when they say "you" they mean you. 
                        
                        Format: "[username] fact" or "[username] [fact about AI]"
-                       
+                       User says "I have a test tomorrow" and today is May 12th → Extract: "[username] has a test on May 13th"
+                       Extract facts with ABSOLUTE dates, not relative dates.
                        Extract facts ABOUT THE USER, including:
                        - Personal information: "[alice] likes dogs"
                        - User's relationships/actions with the AI: "[alice] created me", "[bob] told me to help"
                        - User's preferences and traits: "[carol] is learning Python"
                        
-                       IMPORTANT: only extract around {statement.length // 6} facts or however many are necessary, and make sure they are concise and relevant.
+                       IMPORTANT: only extract around {len(statement) // 6} facts or however many are necessary, and make sure they are concise and relevant.
                        Here is what the user said:
                        User: {author}
                        Message: {statement}
