@@ -2,12 +2,13 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 from memory import Memory
+from datetime import datetime
 
 load_dotenv()
 main_prompt = str(os.getenv("PROMPT"))
 
 client = OpenAI(base_url="http://localhost:1234/v1", api_key="placeholder")
-character = {"role": "system", "content": main_prompt}
+character = {"role": "system", "content": main_prompt + """Throughout the conversation, you will recieve memories with the time elapsed since then do NOT add your own time, e.g. no "(from X minutes ago)"."""}
 messages = []
 messages.append(character)
 memory = Memory()
@@ -34,12 +35,19 @@ class llm:
             past_messages.reverse()
             
             for msg in past_messages:
+                diff = datetime.now(msg.created_at.tzinfo) - msg.created_at
+                if diff.total_seconds() < 3600:
+                    recency = f"{int(diff.total_seconds() // 60)} minutes ago"
+                elif diff.total_seconds() < 3600 * 24:
+                    recency = f"{int(diff.total_seconds() // 3600)} hours ago"
+                else:
+                    recency = f"{int(diff.total_seconds() // (3600 * 24))} days ago"
                 if msg.author.bot:
                     # AI response
-                    self.messages.append({"role": "assistant", "content": msg.content})
+                    self.messages.append({"role": "assistant", "content": f"{msg.content} (from {recency})"})
                 else:
                     # User message
-                    self.messages.append({"role": "user", "name": msg.author.name.replace(" ", "_"), "content": f"[{msg.author.name}]: {msg.content}"})
+                    self.messages.append({"role": "user", "name": msg.author.name.replace(" ", "_"), "content": f"[{msg.author.name}]: {msg.content} (from {recency})"})
             
             print(f"Loaded {len(past_messages)} past messages from Discord")
         except Exception as e:
@@ -48,22 +56,31 @@ class llm:
         print(f"received message: {statement}")
         content = client.chat.completions.create(
             model = "local",
-            messages=[{"role": "system", "content": f"""You are forming semantic memories. You will be given a line that the user said to you.
-                       Extract only facts from what the user says. Format: "[username] fact about them".
-                       Example: "[alice] likes dogs and has a dog named Brownie" 
-                       Example: "I am an AI on Discord."
+            messages=[{"role": "system", "content": f"""You are extracting facts about the user, who is talking to you, so when they say "you" they mean you. 
                        
-                       Here is the line:
+                       Format: "[username] fact" or "[username] [fact about AI]"
+                       
+                       Extract facts ABOUT THE USER, including:
+                       - Personal information: "[alice] likes dogs"
+                       - User's relationships/actions with the AI: "[alice] created me", "[bob] told me to help"
+                       - User's preferences and traits: "[carol] is learning Python"
+                       
+                       IMPORTANT: only extract around {statement.length // 6} facts or however many are necessary, and make sure they are concise and relevant.
+                       Here is what the user said:
                        User: {author}
-                       Message: {statement}"""}],
+                       Message: {statement}
+                       
+                       If there are no extractable facts, respond with: "No facts"
+                       Otherwise, output ONLY the facts, one per line."""}],
             temperature = 0
         )
         content_text = content.choices[0].message.content
-        past_semantic, past_episodic = memory.retrieve_memories(query = statement, n = 20, threshold = 0.5)
+        past_semantic, past_episodic = memory.retrieve_memories(query = content_text)
         # past_semantic = memory.retrieve_memories(query = content_text, type = "semantic")
         # past_episodic = memory.retrieve_memories(query = content_text, type = "episodic")
         #experiment: mix semantic and episodic vs list them separately
         context = messages.copy()
+        context.append({"role": "system", "content": f"Current date and time: {datetime.now().strftime('%A, %B %d, %Y at %I:%M %p')}"})
         if past_semantic or past_episodic:
             facts = " | ".join(past_semantic)
             context.append({"role": "system", "content": f"Your semantic memories: {facts}"})
@@ -94,7 +111,7 @@ class llm:
             Keep episodic memories to 1-3 sentences. You can describe emotions, tone, and personality traits, but don't pad it with irrelevant details.
             Dialogue marked with "role": "assistant" are the responses you gave, and "role": "user" are the messages from the user.
             Example: "[alice] and I talked about our day and we got along well."
-            Example: "I found out that [bob] is my creator and I am grateful for that."
+            Example: "[assistant] found out that [bob] is their creator and [assistant] is grateful for that."
             
                         
             
