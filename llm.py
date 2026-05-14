@@ -44,23 +44,27 @@ class llm:
                     recency = f"{int(diff.total_seconds() // (3600 * 24))} days ago"
                 if msg.author.bot:
                     # AI response
-                    self.messages.append({"role": "assistant", "content": f"{msg.content} (from {recency})"})
+                    self.messages.append({"role": "assistant", "content": f"{msg.content} "})
                 else:
                     # User message
-                    self.messages.append({"role": "user", "name": msg.author.name.replace(" ", "_"), "content": f"[{msg.author.name}]: {msg.content} (from {recency})"})
+                    self.messages.append({"role": "user", "name": msg.author.name.replace(" ", "_"), "content": f"[{msg.author.name}]: {msg.content}"})
             
             print(f"Loaded {len(past_messages)} past messages from Discord")
         except Exception as e:
             print(f"Error loading past messages: {e}")
     async def ask(self, statement = str, author = str):
         print(f"received message: {statement}")
+        # Build conversation history outside f-string to avoid backslash issue
+        conversation_history = "\n".join([f"{"User" if msg['role'] == 'user' else 'You'}: {msg['content']}" for msg in self.messages[-10:]])
+        last_ai_message = next((msg['content'] for msg in reversed(self.messages) if msg['role'] == 'assistant'), '')
+        print("DEBUG: last AI message:", last_ai_message)
         content = client.chat.completions.create(
             model = "local",
             messages=[{
                 "role": "system", "content": f"""Today is {datetime.now().strftime('%A, %B %d, %Y')}. 
-                You are extracting facts about the user, who is talking to you, so when they say "you" they mean you. 
+                Your task is to extract facts. The user is talking to you.
                 CONVERSATION HISTORY:
-                {"\n".join([f"{msg['role']}: {msg['content']}" for msg in self.messages[-10:]])}
+                {conversation_history}
                 Format: "[username] fact" or "[username] [fact about AI]"
                 User says "I have a test tomorrow" and today is May 12th → Extract: "[username] has a test on May 13th"
                 Extract facts with ABSOLUTE dates, not relative dates.
@@ -71,8 +75,12 @@ class llm:
                 - Facts about yourself
                        
                 IMPORTANT: only extract around {len(statement.split()) // 6} facts or however many are necessary, and make sure they are concise and relevant.
-                IMPORTANT: Extract both messages you sent and the user sent, given the context of the conversation.
-                You: {next((msg['content'] for msg in reversed(self.messages) if msg['role'] == 'assistant'), '')}
+                IMPORTANT: Extract only both messages you sent and the user sent, given the context of the conversation. Do NOT respond to the user, responses should be your internal semantic thoughts.
+                OUTPUT FORMAT: Return ONLY facts in the format "[someone] fact" - one per line. 
+                NO commentary, analysis, or meta-thoughts.  
+                EXTRACT THIS MESSAGE:
+                You: {last_ai_message}
+                THEN EXTRACT THIS MESSAGE:
                 User: {author}
                 Message: {statement}
                 """}],

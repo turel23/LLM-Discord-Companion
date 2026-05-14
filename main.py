@@ -46,10 +46,10 @@ class Client(commands.Bot):
             self.message_count = 0
             await llm_instance.form_episodic_memory()
         print(f"{message.author} says: {message.content}")
-        await asyncio.sleep(random.normalvariate(mu = len(message.content) / 6, sigma = len(message.content.split()) / 30))
+        await asyncio.sleep(random.normalvariate(mu = len(message.content.split()) / 6, sigma = len(message.content.split()) / 30))
         async with message.channel.typing():
             answer = await llm_instance.ask(statement = message.content, author = message.author.name)
-            await asyncio.sleep(random.normalvariate(mu = len(answer) / 15, sigma = 1))
+            await asyncio.sleep(random.normalvariate(mu = len(answer.split()) / 15, sigma = len(answer.split()) / 50))
             await message.channel.send(answer)
             self.message_count += 1
 
