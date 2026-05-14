@@ -56,23 +56,26 @@ class llm:
         print(f"received message: {statement}")
         content = client.chat.completions.create(
             model = "local",
-            messages=[{"role": "system", "content": f"""Today is {datetime.now().strftime('%A, %B %d, %Y')}. You are extracting facts about the user, who is talking to you, so when they say "you" they mean you. 
+            messages=[{
+                "role": "system", "content": f"""Today is {datetime.now().strftime('%A, %B %d, %Y')}. 
+                You are extracting facts about the user, who is talking to you, so when they say "you" they mean you. 
+                CONVERSATION HISTORY:
+                {"\n".join([f"{msg['role']}: {msg['content']}" for msg in self.messages[-10:]])}
+                Format: "[username] fact" or "[username] [fact about AI]"
+                User says "I have a test tomorrow" and today is May 12th → Extract: "[username] has a test on May 13th"
+                Extract facts with ABSOLUTE dates, not relative dates.
+                Extract facts including:
+                - Personal information: "[alice] likes dogs"
+                - User's relationships/actions with the AI: "[alice] created me", "[bob] told me to help"
+                - User's preferences and traits: "[carol] is learning Python"
+                - Facts about yourself
                        
-                       Format: "[username] fact" or "[username] [fact about AI]"
-                       User says "I have a test tomorrow" and today is May 12th → Extract: "[username] has a test on May 13th"
-                       Extract facts with ABSOLUTE dates, not relative dates.
-                       Extract facts ABOUT THE USER, including:
-                       - Personal information: "[alice] likes dogs"
-                       - User's relationships/actions with the AI: "[alice] created me", "[bob] told me to help"
-                       - User's preferences and traits: "[carol] is learning Python"
-                       
-                       IMPORTANT: only extract around {len(statement) // 6} facts or however many are necessary, and make sure they are concise and relevant.
-                       Here is what the user said:
-                       User: {author}
-                       Message: {statement}
-                       
-                       If there are no extractable facts, respond with: "No facts"
-                       Otherwise, output ONLY the facts, one per line."""}],
+                IMPORTANT: only extract around {len(statement.split()) // 6} facts or however many are necessary, and make sure they are concise and relevant.
+                IMPORTANT: Extract both messages you sent and the user sent, given the context of the conversation.
+                You: {next((msg['content'] for msg in reversed(self.messages) if msg['role'] == 'assistant'), '')}
+                User: {author}
+                Message: {statement}
+                """}],
             temperature = 0
         )
         content_text = content.choices[0].message.content
