@@ -7,10 +7,12 @@ from llm import llm
 import random
 import asyncio
 
+
 load_dotenv()
 
 # Create an instance of the llm class
 llm_instance = llm()
+memory = Memory()
 
 class Client(commands.Bot):
     def __init__(self, *args, **kwargs):
