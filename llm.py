@@ -138,13 +138,3 @@ class llm:
             temperature = 0 #idea: change the temperature based on mood
         )
         memory.add_document(episode.choices[0].message.content, metadata = {"type": "episodic", "retention": 1.0, "timestamp": datetime.now().isoformat()})
-    def compress_memory(self, memory, retention):
-        compression = client.chat.completions.creat(
-            model = "local",
-            messages = [{"role": "system", "content": f"""You compress a memory for an AI agent. 
-                The memory is this: {memory}
-                The retention of the memory is {retention}. 
-                If the retention is low, you should compress more aggressively, keeping only the core essence of the memory. 
-                If the retention is high, you can keep more details. 
-                Output ONLY the compressed memory, which should be a concise summary that captures the key information and emotional tone of the original memory."""}]
-        )

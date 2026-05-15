@@ -13,15 +13,20 @@ class MemoryManage:
     def retrieve_relevant(self, query, top_k = int):
         relevant = self.memory.query(query = query, top_k = top_k)
         relevant.metadata["retention"] = self.calculate_retention(relevant.metadata["retention"])        
+        relevant.metadata["m"]
         for doc in relevant:
             if random.random() > doc.metadata["retention"]:
                 relevant.remove(doc)
         if random.random() < 0.3:
             relevant.metadata["retention"] = 1.0
+            relevant.metadata["timestamp"] = datetime.now().isoformat()
         past_semantic = [doc for doc in relevant if doc.metadata.get("type") == "semantic"]
         past_episodic = [doc for doc in relevant if doc.metadata.get("type") == "episodic"]
         return past_semantic, past_episodic
-    def extract_keywords(self, text):
-        rake = Rake()
-        rake.extract_keywords_from_text(text)
-        return rake.get_ranked_phrases()
+    #to implement comrpession of memory
+    def compressed_memory(self, text, retention):
+        if retention < 0.05:
+            return "I forgot what the user said"
+        phrases = random.sample(range(1, len(text.split())), int(retention * len(text.split()))).sort()
+        words = [text.split()[i] for i in phrases]
+        return "...".join(words)
