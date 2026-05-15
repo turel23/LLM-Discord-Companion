@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from memory import Memory
 from datetime import datetime
+from mem0.memory import Memory
 
 load_dotenv()
 main_prompt = str(os.getenv("PROMPT"))
@@ -87,7 +87,10 @@ class llm:
             temperature = 0
         )
         content_text = content.choices[0].message.content
-        past_semantic, past_episodic = memory.retrieve_memories(query = content_text)
+        relevant = memory.query(query = content_text, top_k = 50)
+        
+        past_semantic = [doc for doc in relevant if doc.metadata.get("type") == "semantic"]
+        past_episodic = [doc for doc in relevant if doc.metadata.get("type") == "episodic"]
         # past_semantic = memory.retrieve_memories(query = content_text, type = "semantic")
         # past_episodic = memory.retrieve_memories(query = content_text, type = "episodic")
         #experiment: mix semantic and episodic vs list them separately
@@ -112,7 +115,8 @@ class llm:
         print(f"DEBUG relevant memories episodic: {past_episodic}")
         self.messages.append({"role": "assistant", "content": answer})
         print(f"DEBUG output: {answer} ")
-        memory.save_semantic_memory(content_text, user = author)
+        memory.add_document(content_text, metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat()})
+        #retention = e^-t/S, S=36.716, while t is in minutes
         return answer
     async def form_episodic_memory(self):
         prompt =[]
@@ -133,4 +137,14 @@ class llm:
             messages = prompt,
             temperature = 0 #idea: change the temperature based on mood
         )
-        memory.save_episodic_memory(episode.choices[0].message.content)
+        memory.add_document(episode.choices[0].message.content, metadata = {"type": "episodic", "retention": 1.0, "timestamp": datetime.now().isoformat()})
+    def compress_memory(self, memory, retention):
+        compression = client.chat.completions.creat(
+            model = "local",
+            messages = [{"role": "system", "content": f"""You compress a memory for an AI agent. 
+                The memory is this: {memory}
+                The retention of the memory is {retention}. 
+                If the retention is low, you should compress more aggressively, keeping only the core essence of the memory. 
+                If the retention is high, you can keep more details. 
+                Output ONLY the compressed memory, which should be a concise summary that captures the key information and emotional tone of the original memory."""}]
+        )
