@@ -115,6 +115,7 @@ class llm:
         self.messages.append({"role": "assistant", "content": answer})
         print(f"DEBUG output: {answer} ")
         print(f"DEBUG: Adding memory with timestamp: {datetime.now().isoformat()}")
+        facts = [f.strip() for f in content_text.split('\n') if f.strip()]
         m.memory.add(
             messages = [{"role": "user", "content": content_text}], 
             metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat()}, 

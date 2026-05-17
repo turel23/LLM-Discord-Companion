@@ -22,15 +22,18 @@ memory = Memory.from_config(config)
 class MemoryManage:
     def __init__(self):
         self.memory = memory
-    def calculate_retention(self, created_at):
-        if isinstance(created_at, str):
-            created_at = datetime.fromisoformat(created_at.replace('+00:00', ''))
-        return math.e**(-(datetime.now()-created_at).total_seconds()/(60*36.716))
+    def calculate_retention(self, timestamp):
+        if isinstance(timestamp, str):
+            timestamp = datetime.fromisoformat(timestamp)
+        # Make datetime.now() aware (UTC)
+        now = datetime.now(timestamp.tzinfo) if timestamp.tzinfo else datetime.now()
+        return math.e**(-(now - timestamp).total_seconds()/(60*36.716))
     def retrieve_relevant(self, query, top_k = 50, user_id = ""):
         relevant = self.memory.search(query, top_k = top_k, filters = {"user_id": user_id})
         
         for doc in relevant["results"]:
             retention = self.calculate_retention(doc["created_at"])
+            print("DEBUG retention memory:", doc["memory"], "created at:", doc["created_at"], "retention:", retention)
             self.memory.update(memory_id=doc["id"], data=self.compressed_memory(doc["memory"], retention), metadata={"retention": retention})
         
         # Random removal based on retention
