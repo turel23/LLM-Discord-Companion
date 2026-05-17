@@ -2,7 +2,8 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import datetime
-from mem0.memory import Memory
+from mem0 import Memory
+from memory import MemoryManage as MemoryManager
 
 load_dotenv()
 main_prompt = str(os.getenv("PROMPT"))
@@ -11,7 +12,7 @@ client = OpenAI(base_url="http://localhost:1234/v1", api_key="placeholder")
 character = {"role": "system", "content": main_prompt + """Throughout the conversation, you will recieve memories with the time elapsed since then do NOT add your own time, e.g. no "(from X minutes ago)"."""}
 messages = []
 messages.append(character)
-memory = Memory()
+m = MemoryManager()
 
 """Going to add a thinking layer, so they flow is passing text through as a query and pulling in content, 
 then passing into a thinking layer. The thinking output is passed through another query search and then information is added in. 
@@ -55,7 +56,7 @@ class llm:
     async def ask(self, statement = str, author = str):
         print(f"received message: {statement}")
         # Build conversation history outside f-string to avoid backslash issue
-        conversation_history = "\n".join([f"{"User" if msg['role'] == 'user' else 'You'}: {msg['content']}" for msg in self.messages[-10:]])
+        conversation_history = "\n".join([f"{'User' if msg['role'] == 'user' else 'You'}: {msg['content']}" for msg in self.messages[-10:]])
         last_ai_message = next((msg['content'] for msg in reversed(self.messages) if msg['role'] == 'assistant'), '')
         print("DEBUG: last AI message:", last_ai_message)
         content = client.chat.completions.create(
@@ -87,10 +88,8 @@ class llm:
             temperature = 0
         )
         content_text = content.choices[0].message.content
-        relevant = memory.query(query = content_text, top_k = 50)
-        
-        past_semantic = [doc for doc in relevant if doc.metadata.get("type") == "semantic"]
-        past_episodic = [doc for doc in relevant if doc.metadata.get("type") == "episodic"]
+        print(f"DEBUG extracted facts: {content_text}")
+        past_semantic, past_episodic = m.retrieve_relevant(query = content_text, top_k = 50, user_id = author.replace(" ", "_"))
         # past_semantic = memory.retrieve_memories(query = content_text, type = "semantic")
         # past_episodic = memory.retrieve_memories(query = content_text, type = "episodic")
         #experiment: mix semantic and episodic vs list them separately
@@ -115,10 +114,16 @@ class llm:
         print(f"DEBUG relevant memories episodic: {past_episodic}")
         self.messages.append({"role": "assistant", "content": answer})
         print(f"DEBUG output: {answer} ")
-        memory.add_document(content_text, metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat()})
+        print(f"DEBUG: Adding memory with timestamp: {datetime.now().isoformat()}")
+        m.memory.add(
+            messages = [{"role": "user", "content": content_text}], 
+            metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat()}, 
+            user_id=author.replace(" ", "_"),
+            infer = False
+            )
         #retention = e^-t/S, S=36.716, while t is in minutes
         return answer
-    async def form_episodic_memory(self):
+    async def form_episodic_memory(self, user):
         prompt =[]
         prompt.append(character)
         prompt.append({"role": "system", "content": f"""You create the episodic memory of an AI agent. 
@@ -137,4 +142,5 @@ class llm:
             messages = prompt,
             temperature = 0 #idea: change the temperature based on mood
         )
-        memory.add_document(episode.choices[0].message.content, metadata = {"type": "episodic", "retention": 1.0, "timestamp": datetime.now().isoformat()})
+        print(f"DEBUG episodic memory output: {episode.choices[0].message.content}")
+        m.memory.add(messages = [{"role": "user", "content": episode.choices[0].message.content}], metadata = {"type": "episodic", "retention": 1.0, "timestamp": datetime.now().isoformat()}, user_id = user.replace(" ", "_"), infer = False)

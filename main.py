@@ -12,7 +12,6 @@ load_dotenv()
 
 # Create an instance of the llm class
 llm_instance = llm()
-memory = Memory()
 
 class Client(commands.Bot):
     def __init__(self, *args, **kwargs):
@@ -46,7 +45,7 @@ class Client(commands.Bot):
         
         if self.message_count >= 10:
             self.message_count = 0
-            await llm_instance.form_episodic_memory()
+            await llm_instance.form_episodic_memory(user = message.author.name)
         print(f"{message.author} says: {message.content}")
         await asyncio.sleep(random.normalvariate(mu = len(message.content.split()) / 6, sigma = len(message.content.split()) / 30))
         async with message.channel.typing():
