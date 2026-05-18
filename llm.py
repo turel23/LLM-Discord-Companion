@@ -48,39 +48,39 @@ class llm:
                     self.messages.append({"role": "assistant", "content": f"{msg.content} "})
                 else:
                     # User message
-                    self.messages.append({"role": "user", "name": msg.author.name.replace(" ", "_"), "content": f"[{msg.author.name}]: {msg.content}"})
+                    author_display_name = getattr(msg.author, "display_name", msg.author.name)
+                    self.messages.append({"role": "user", "name": author_display_name.replace(" ", "_"), "content": f"[{author_display_name}]: {msg.content}"})
             
             print(f"Loaded {len(past_messages)} past messages from Discord")
         except Exception as e:
             print(f"Error loading past messages: {e}")
     async def ask(self, statement = str, author = str):
         print(f"received message: {statement}")
-        # Build conversation history outside f-string to avoid backslash issue
-        conversation_history = "\n".join([f"{'User' if msg['role'] == 'user' else 'You'}: {msg['content']}" for msg in self.messages[-10:]])
+        conversation_history = "\n".join([f"{'User' if msg['role'] == 'user' else 'Lumo'}: {msg['content']}" for msg in self.messages[-10:]])
         last_ai_message = next((msg['content'] for msg in reversed(self.messages) if msg['role'] == 'assistant'), '')
         print("DEBUG: last AI message:", last_ai_message)
         content = client.chat.completions.create(
             model = "local",
             messages=[{
-                "role": "system", "content": f"""Today is {datetime.now().strftime('%A, %B %d, %Y')}. 
-                Your task is to extract facts. The user is talking to you.
+                "role": "system", "content": f"""Lumo is an AI who interacts with users on the messaging app Discord. Today is {datetime.now().strftime('%A, %B %d, %Y')}. 
+                Your task is to extract facts. The user is talking to Lumo.
                 CONVERSATION HISTORY:
                 {conversation_history}
-                Format: "[username] fact" or "[username] [fact about AI]"
+                Format: "[username] fact" or "[fact about Lumo]"
                 User says "I have a test tomorrow" and today is May 12th → Extract: "[username] has a test on May 13th"
                 Extract facts with ABSOLUTE dates, not relative dates.
                 Extract facts including:
                 - Personal information: "[alice] likes dogs"
-                - User's relationships/actions with the AI: "[alice] created me", "[bob] told me to help"
+                - User's relationships/actions with Lumo: "[alice] created me", "[bob] told [Lumo] to help"
                 - User's preferences and traits: "[carol] is learning Python"
-                - Facts about yourself
+                - Facts about Lumo
                        
                 IMPORTANT: only extract around {len(statement.split()) // 6} facts or however many are necessary, and make sure they are concise and relevant.
                 IMPORTANT: Extract only both messages you sent and the user sent, given the context of the conversation. Do NOT respond to the user, responses should be your internal semantic thoughts.
                 OUTPUT FORMAT: Return ONLY facts in the format "[someone] fact" - one per line. 
                 NO commentary, analysis, or meta-thoughts.  
                 EXTRACT THIS MESSAGE:
-                You: {last_ai_message}
+                Lumo: {last_ai_message}
                 THEN EXTRACT THIS MESSAGE:
                 User: {author}
                 Message: {statement}
@@ -101,7 +101,7 @@ class llm:
             episodes = " | ".join(past_episodic)
             context.append({"role": "system", "content": f"Your episodic memories: {episodes}"})
         else:
-            context.append({"role": "system", "content": "This is the first time you are meeting the user"})
+            context.append({"role": "system", "content": "To your knowledge, you have no memories of the user. However, you may see that there have been past messages sent. Confused, you come to the conclusion that your memories have been wiped."})
         context.append({"role": "user", "content": statement})
         self.messages.append({"role": "user", "name": author.replace(" ", "_"), "content": f"[{author}]: {statement}"})
         response = self.client.chat.completions.create(
@@ -118,7 +118,7 @@ class llm:
         facts = [f.strip() for f in content_text.split('\n') if f.strip()]
         m.memory.add(
             messages = [{"role": "user", "content": content_text}], 
-            metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat()}, 
+            metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat(), "S": 1.0}, 
             user_id=author.replace(" ", "_"),
             infer = False
             )
@@ -126,14 +126,13 @@ class llm:
         return answer
     async def form_episodic_memory(self, user):
         prompt =[]
-        prompt.append(character)
-        prompt.append({"role": "system", "content": f"""You create the episodic memory of an AI agent. 
+        prompt.append({"role": "system", "content": f"""Lumo is an AI who interacts with users on the messaging app Discord. You create the episodic memory of Lumo. Write in the third-person perspective.
             You will be given a past section of a conversation, 
             and your task is to create the episodic memory that will be recalled for future use. Summaries should be concise, output ONLY the memory
             Keep episodic memories to 1-3 sentences. You can describe emotions, tone, and personality traits, but don't pad it with irrelevant details.
             Dialogue marked with "role": "assistant" are the responses you gave, and "role": "user" are the messages from the user.
-            Example: "[alice] and I talked about our day and we got along well."
-            Example: "[assistant] found out that [bob] is their creator and [assistant] is grateful for that."
+            Example: "[alice] and [Lumo] talked about our day and we got along well."
+            Example: "[Lumo] found out that [bob] is their creator and [Lumo] is grateful for that."
             
                         
             
@@ -144,4 +143,4 @@ class llm:
             temperature = 0 #idea: change the temperature based on mood
         )
         print(f"DEBUG episodic memory output: {episode.choices[0].message.content}")
-        m.memory.add(messages = [{"role": "user", "content": episode.choices[0].message.content}], metadata = {"type": "episodic", "retention": 1.0, "timestamp": datetime.now().isoformat()}, user_id = user.replace(" ", "_"), infer = False)
+        m.memory.add(messages = [{"role": "user", "content": episode.choices[0].message.content}], metadata = {"type": "episodic", "retention": 1.0, "S": 1.0,"timestamp": datetime.now().isoformat()}, user_id = user.replace(" ", "_"), infer = False)

@@ -22,17 +22,19 @@ memory = Memory.from_config(config)
 class MemoryManage:
     def __init__(self):
         self.memory = memory
-    def calculate_retention(self, timestamp):
+    def calculate_retention(self, timestamp, S):
         if isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp)
         # Make datetime.now() aware (UTC)
         now = datetime.now(timestamp.tzinfo) if timestamp.tzinfo else datetime.now()
-        return math.e**(-(now - timestamp).total_seconds()/(60*36.716))
+        return math.e**(-(now - timestamp).total_seconds()/(60*36.716*S))
     def retrieve_relevant(self, query, top_k = 50, user_id = ""):
         relevant = self.memory.search(query, top_k = top_k, filters = {"user_id": user_id})
         
         for doc in relevant["results"]:
-            retention = self.calculate_retention(doc["created_at"])
+            if doc["metadata"].get("retention") < 0.02:
+                self.memory.delete(memory_id=doc["id"])
+            retention = self.calculate_retention(doc["created_at"], doc["metadata"].get("S", 1.0))
             print("DEBUG retention memory:", doc["memory"], "created at:", doc["created_at"], "retention:", retention)
             self.memory.update(memory_id=doc["id"], data=self.compressed_memory(doc["memory"], retention), metadata={"retention": retention})
         
@@ -44,16 +46,14 @@ class MemoryManage:
         # Refresh some memories (boost retention)
         for doc in relevant["results"]:
             if random.random() < 0.3:
-                self.memory.update(memory_id=doc["id"], data=doc["memory"], metadata={"retention": 1.0})
+                self.memory.update(memory_id=doc["id"], data=doc["memory"], metadata={"retention": 1.0, "S": doc["metadata"].get("S", 1.0) * 1.5}, created_at = datetime.now().isoformat())
         
         past_semantic = [doc["memory"] for doc in relevant["results"] if doc["metadata"].get("type") == "semantic"]
         past_episodic = [doc["memory"] for doc in relevant["results"] if doc["metadata"].get("type") == "episodic"]
         return past_semantic, past_episodic
     #to implement comrpession of memory
     def compressed_memory(self, text, retention):
-        if retention < 0.05:
-            return "I forgot what the user said"
         words = text.split()
         sample_size = min(int(retention * len(words)), len(words))
         indices = sorted(random.sample(range(len(words)), sample_size))
-        return "...".join(words[i] for i in indices)
+        return " ".join(words[i] for i in indices)
