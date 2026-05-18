@@ -14,7 +14,7 @@ config = {
         "config": {
             "collection_name": "mem0_local",
             "embedding_model_dims": 384,     # MUST match embedder
-            "path": "./mem_db",       # NEW path so old 1536 collection doesn't conflict
+            "path": "./mem_db",
         },
     },
 }
