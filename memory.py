@@ -7,7 +7,8 @@ config = {
     "llm": {"provider": "lmstudio"},
     "embedder": {
         "provider": "lmstudio",
-        "config": {"embedding_dims": 384},   # match your LM Studio model
+        "config": {"embedding_dims": 384},
+        "compression_type": "binary",
     },
     "vector_store": {
         "provider": "qdrant",
@@ -29,7 +30,7 @@ class MemoryManage:
         now = datetime.now(timestamp.tzinfo) if timestamp.tzinfo else datetime.now()
         return math.e**(-(now - timestamp).total_seconds()/(60*36.716*S))
     def retrieve_relevant(self, query, top_k = 50, user_id = ""):
-        relevant = self.memory.search(query, top_k = top_k, filters = {"user_id": user_id})
+        relevant = self.memory.search(query, limit = top_k, filters = {})
         
         for doc in relevant["results"]:
             if doc["metadata"].get("retention") < 0.02:
