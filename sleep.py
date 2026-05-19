@@ -23,9 +23,7 @@ class Sleep:
         for mem in memories:
             results = m.memory.search(query = mem["memory"], limit = 3, filters = {})
             results["results"].join(" | ")
-            output_sem = llm.chat.completions.create() #create a semantic memory
-            output_episodic = llm.chat.completions.create() #create an episodic memory
-            m.memory.add(output_sem)
-            m.memory.add(output_episodic)
+            reflection = llm.chat.completions.create()
+            m.memory.add()
 
 

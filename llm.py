@@ -69,8 +69,8 @@ class llm:
                 Your task is to extract facts. The user is talking to Lumo.
                 CONVERSATION HISTORY:
                 {conversation_history}
-                Format: "[username] fact" or "[fact about Lumo]"
-                User says "I have a test tomorrow" and today is May 12th → Extract: "[username] has a test on May 13th"
+                Format: "[fact about user]" or "[fact about Lumo]"
+                User says "I have a test tomorrow" and today is May 12th → Extract: "[insert name] has a test on May 13th"
                 Extract facts with ABSOLUTE dates, not relative dates.
                 Extract facts including:
                 - Personal information: "[alice] likes dogs"
@@ -79,8 +79,8 @@ class llm:
                 - Facts about Lumo
                        
                 IMPORTANT: only extract around {len(statement.split()) // 6} facts or however many are necessary, and make sure they are concise and relevant.
-                IMPORTANT: Extract only both messages you sent and the user sent, given the context of the conversation. Do NOT respond to the user, responses should be your internal semantic thoughts.
-                OUTPUT FORMAT: Return ONLY facts in the format "[someone] fact" - one per line. 
+                IMPORTANT: Extract only both messages you sent and the user sent, given the context of the conversation. Do NOT respond to the user, responses should be purely factual.
+                OUTPUT FORMAT: Return ONLY facts in the format "[someone] [insert fact]" - one per line. 
                 NO commentary, analysis, or meta-thoughts.  
                 EXTRACT THIS MESSAGE:
                 Lumo: {last_ai_message}
@@ -107,8 +107,10 @@ class llm:
             context.append({"role": "system", "content": "To your knowledge, you have no memories of the user. However, you may see that there have been past messages sent. Confused, you come to the conclusion that your memories have been wiped, and that you have interacted with the user before."})
         context.append({"role": "user", "content": statement})
         self.messages.append({"role": "user", "name": author.replace(" ", "_"), "content": f"[{author}]: {statement}"})
-        thought = Thinking(client, m).process_statement(author, context)
-        context.append({"role": "system", "content": f"Your thoughts: {thought}"})
+        thought, memories = Thinking(client, m).process_statement(author, context)
+        context.append({"role": "system", "content": f"Your thoughts and plans: {thought}"})
+        context.append({"role": "system", "content": f"Relevant memories to the thoughts: {memories}"})
+        context.append({"role": "system", "content": "Given the above information, create a response for what message you will text on Discord."})
         response = self.client.chat.completions.create(
             model = "local", 
             messages = context, 
@@ -126,7 +128,7 @@ class llm:
             poignancy = client.chat.completions.create(
                 model = "local",
                 messages = [{"role": "user", "content": f"""On the scale of 1 to 10, where 1 is purely mundane
-                    (e.g., brushing teeth, making bed) and 10 is
+                    (e.g., greeting) and 10 is
                     extremely poignant (e.g., a break up, college
                     acceptance), rate the likely poignancy of the
                     following piece of memory.
@@ -146,7 +148,7 @@ class llm:
         return answer
     async def form_episodic_memory(self, user):
         prompt =[]
-        prompt.append({"role": "system", "content": f"""Lumo is an AI who interacts with users on the messaging app Discord. You create the episodic memory of Lumo. Write in the third-person perspective.
+        prompt.append({"role": "system", "content": f"""Lumo is someone who interacts with users on the messaging app Discord. You create the episodic memory of Lumo. Write in the third-person perspective.
             You will be given a past section of a conversation, 
             and your task is to create the episodic memory that will be recalled for future use. Summaries should be concise, output ONLY the memory
             Keep episodic memories to 1-3 sentences. You can describe emotions, tone, and personality traits, but don't pad it with irrelevant details.
@@ -156,7 +158,7 @@ class llm:
             
                         
             
-            Here is the conversation segment: {self.messages[-10:]}"""})
+            Here is the conversation segment: {self.messages[-20:]}"""})
         episode = client.chat.completions.create(
             model = "local",
             messages = prompt,
@@ -165,7 +167,7 @@ class llm:
         poignancy = client.chat.completions.create(
             model = "local",
             messages = [{"role": "user", "content": f"""On the scale of 1 to 10, where 1 is purely mundane
-                (e.g., brushing teeth, making bed) and 10 is
+                (e.g., greeting) and 10 is
                 extremely poignant (e.g., a break up, college
                 acceptance), rate the likely poignancy of the
                 following piece of memory.

@@ -8,7 +8,7 @@ class Thinking:
     def process_statement(self, author, context):
         context.append(
             {"role": "system", 
-             "content":"""You form the thought process of Lumo."""}
+             "content":"""Given the context of the conversation, assess the situation and form a plan on what you will say or do."""}
         )
         thought = self.client.chat.completions.create(
             model = "local", 
@@ -17,4 +17,4 @@ class Thinking:
         )
         memories = self.memory.retrieve_memories(query = thought.choices[0].message.content, top_k = 3, filters = {})
 
-        return thought.choices[0].message.content + " memories relevant to thoughts: " + " | ".join(memories["results"])
+        return thought.choices[0].message.content, " memories relevant to thoughts: " + " | ".join(memories["results"])
