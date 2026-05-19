@@ -28,7 +28,7 @@ class MemoryManage:
             timestamp = datetime.fromisoformat(timestamp)
         # Make datetime.now() aware (UTC)
         now = datetime.now(timestamp.tzinfo) if timestamp.tzinfo else datetime.now()
-        return math.e**(-(now - timestamp).total_seconds()/(60*36.716*S))
+        return math.e**(-(now - timestamp).total_seconds()/(60*86.56*S))
     def retrieve_relevant(self, query, top_k: int, user_id = ""):
         relevant = self.memory.search(query, limit = top_k, filters = {})
         

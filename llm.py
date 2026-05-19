@@ -121,12 +121,27 @@ class llm:
         print(f"DEBUG output: {answer} ")
         print(f"DEBUG: Adding memory with timestamp: {datetime.now().isoformat()}")
         facts = [f.strip() for f in content_text.split('\n') if f.strip()]
-        m.memory.add(
-            messages = [{"role": "user", "content": content_text}], 
-            metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat(), "S": 1.0}, 
-            user_id=author.replace(" ", "_"),
-            infer = True
-            )
+        
+        for fact in facts:
+            poignancy = client.chat.completions.create(
+                model = "local",
+                messages = [{"role": "user", "content": f"""On the scale of 1 to 10, where 1 is purely mundane
+                    (e.g., brushing teeth, making bed) and 10 is
+                    extremely poignant (e.g., a break up, college
+                    acceptance), rate the likely poignancy of the
+                    following piece of memory.
+                    Memory: {fact}
+                    Rating: <fill in>"""
+                    }],
+                temperature = 0
+                )
+            poignancy = "".join([char for char in poignancy.choices[0].message.content if char.isdigit()])
+            m.memory.add(
+                messages = [{"role": "user", "content": fact}], 
+                metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat(), "S": 1.0, "poignancy": float(poignancy)}, 
+                user_id=author.replace(" ", "_"),
+                infer = True
+                )
         #retention = e^-t/S, S=36.716, while t is in minutes
         return answer
     async def form_episodic_memory(self, user):
@@ -147,5 +162,18 @@ class llm:
             messages = prompt,
             temperature = 0 #idea: change the temperature based on mood
         )
+        poignancy = client.chat.completions.create(
+            model = "local",
+            messages = [{"role": "user", "content": f"""On the scale of 1 to 10, where 1 is purely mundane
+                (e.g., brushing teeth, making bed) and 10 is
+                extremely poignant (e.g., a break up, college
+                acceptance), rate the likely poignancy of the
+                following piece of memory.
+                Memory: {episode.choices[0].message.content}
+                Rating: <fill in>"""
+                }],
+            temperature = 0
+        )
+        poignancy = "".join([char for char in poignancy.choices[0].message.content if char.isdigit()])
         print(f"DEBUG episodic memory output: {episode.choices[0].message.content}")
-        m.memory.add(messages = [{"role": "user", "content": episode.choices[0].message.content}], metadata = {"type": "episodic", "retention": 1.0, "S": 1.0,"timestamp": datetime.now().isoformat()}, user_id = user.replace(" ", "_"), infer = False)
+        m.memory.add(messages = [{"role": "user", "content": episode.choices[0].message.content}], metadata = {"type": "episodic", "retention": 1.0, "S": 1.0,"timestamp": datetime.now().isoformat(), "poignancy": float(poignancy)}, user_id = user.replace(" ", "_"), infer = False)
