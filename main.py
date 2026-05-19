@@ -33,6 +33,9 @@ class Client(commands.Bot):
         self.message_count += 1
         if message.author == self.user:
             return
+
+        author_display_name = getattr(message.author, "display_name", message.author.name)
+
         if message.attachments:
             print("detected attachments")
             for attachment in message.attachments:
@@ -45,11 +48,11 @@ class Client(commands.Bot):
         
         if self.message_count >= 10:
             self.message_count = 0
-            await llm_instance.form_episodic_memory(user = message.author.name)
-        print(f"{message.author} says: {message.content}")
+            await llm_instance.form_episodic_memory(user = author_display_name)
+        print(f"{author_display_name} says: {message.content}")
         await asyncio.sleep(random.normalvariate(mu = len(message.content.split()) / 6, sigma = len(message.content.split()) / 30))
         async with message.channel.typing():
-            answer = await llm_instance.ask(statement = message.content, author = message.author.name)
+            answer = await llm_instance.ask(statement = message.content, author = author_display_name)
             await asyncio.sleep(random.normalvariate(mu = len(answer.split()) / 15, sigma = len(answer.split()) / 50))
             await message.channel.send(answer)
             self.message_count += 1
