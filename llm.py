@@ -1,10 +1,12 @@
 import os
+import random
 import asyncio
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import datetime
 from mem0 import Memory
 from memory import MemoryManage as MemoryManager
+from thinking import Thinking
 
 load_dotenv()
 main_prompt = str(os.getenv("PROMPT"))
@@ -13,6 +15,7 @@ client = OpenAI(base_url="http://localhost:1234/v1", api_key="placeholder")
 character = {"role": "system", "content": main_prompt + """Throughout the conversation, you will recieve memories with the time elapsed since then do NOT add your own time, e.g. no "(from X minutes ago)"."""}
 messages = []
 messages.append(character)
+
 m = MemoryManager()
 
 """Going to add a thinking layer, so they flow is passing text through as a query and pulling in content, 
@@ -63,37 +66,29 @@ class llm:
         content = client.chat.completions.create(
             model = "local",
             messages=[{
-                "role": "system", "content": f"""You are a fact extraction system for Lumo, an AI on Discord.
-TASK: Extract factual information from user messages. Convert to format: "[username] [predicate]"
-
-TODAY'S DATE: {datetime.now().strftime('%A, %B %d, %Y')}
-CURRENT USER: {author}
-
-CONVERSION RULES:
-- "i like X" → "[{author}] likes X"
-- "i'm learning Y" → "[{author}] is learning Y"
-- "i have Z" → "[{author}] has Z"
-- "my name is N" → "[{author}] is named N"
-- Simple personal statements → Convert to "[{author}] [statement]" format
-
-WHAT TO EXTRACT (extract these):
-✓ Personal preferences: "i like pizza" → "[{author}] likes pizza"
-✓ Activities: "i'm coding" → "[{author}] is coding"
-✓ Facts: "i'm 25" → "[{author}] is 25 years old"
-✓ Relationships: "my friend is alice" → "[{author}] has a friend named alice"
-✓ Ownership: "i have a cat" → "[{author}] has a cat"
-
-WHAT NOT TO EXTRACT (skip these):
-✗ Empty/meta statements: "Facts:", "okay", "lol"
-✗ Dialogue fragments: "sigh", "bruh", "skull emoji"
-✗ Questions: "what's your name?"
-✗ Greetings: "hey", "hello there"
-
-ALWAYS extract something meaningful.
-
-MESSAGE: {statement}
-
-Extract facts, one per line. Use format "[{author}] [fact]"."""}],
+                "role": "system", "content": f"""Lumo is an AI who interacts with users on the messaging app Discord. Today is {datetime.now().strftime('%A, %B %d, %Y')}. 
+                Your task is to extract facts. The user is talking to Lumo.
+                CONVERSATION HISTORY:
+                {conversation_history}
+                Format: "[fact about user]" or "[fact about Lumo]"
+                User says "I have a test tomorrow" and today is May 12th → Extract: "[insert name] has a test on May 13th"
+                Extract facts with ABSOLUTE dates, not relative dates.
+                Extract facts including:
+                - Personal information: "[alice] likes dogs"
+                - User's relationships/actions with Lumo: "[alice] created me", "[bob] told [Lumo] to help"
+                - User's preferences and traits: "[carol] is learning Python"
+                - Facts about Lumo
+                       
+                IMPORTANT: only extract around {len(statement.split()) // 6} facts or however many are necessary, and make sure they are concise and relevant.
+                IMPORTANT: Extract only both messages you sent and the user sent, given the context of the conversation. Do NOT respond to the user, responses should be purely factual.
+                OUTPUT FORMAT: Return ONLY facts in the format "[someone] [insert fact]" - one per line. 
+                NO commentary, analysis, or meta-thoughts.  
+                EXTRACT THIS MESSAGE:
+                Lumo: {last_ai_message}
+                THEN EXTRACT THIS MESSAGE:
+                User: {author}
+                Message: {statement}
+                """}],
             temperature = 0
         )
         content_text = content.choices[0].message.content
@@ -103,16 +98,20 @@ Extract facts, one per line. Use format "[{author}] [fact]"."""}],
         # past_episodic = memory.retrieve_memories(query = content_text, type = "episodic")
         #experiment: mix semantic and episodic vs list them separately
         context = messages.copy()
+        memories = past_semantic + past_episodic
+        random.shuffle(memories)
+        memories = " | ".join(memories)
         context.append({"role": "system", "content": f"Current date and time: {datetime.now().strftime('%A, %B %d, %Y at %I:%M %p')}"})
         if past_semantic or past_episodic:
-            facts = " | ".join(past_semantic)
-            context.append({"role": "system", "content": f"Your semantic memories: {facts}"})
-            episodes = " | ".join(past_episodic)
-            context.append({"role": "system", "content": f"Your episodic memories: {episodes}"})
+            context.append({"role": "system", "content": f"Your memories: {memories}"})
         else:
-            context.append({"role": "system", "content": "To your knowledge, you have no memories of the user. However, you may see that there have been past messages sent. Confused, you come to the conclusion that your memories have been wiped."})
+            context.append({"role": "system", "content": "To your knowledge, you have no memories of the user. However, you may see that there have been past messages sent. Confused, you come to the conclusion that your memories have been wiped, and that you have interacted with the user before."})
         context.append({"role": "user", "content": statement})
         self.messages.append({"role": "user", "name": author.replace(" ", "_"), "content": f"[{author}]: {statement}"})
+        thought, memories = Thinking(client, m).process_statement(author, context)
+        context.append({"role": "system", "content": f"Your thoughts and plans: {thought}"})
+        context.append({"role": "system", "content": f"Relevant memories to the thoughts: {memories}"})
+        context.append({"role": "system", "content": "Given the above information, create a response for what message you will text on Discord."})
         response = self.client.chat.completions.create(
             model = "local", 
             messages = context, 
@@ -124,17 +123,27 @@ Extract facts, one per line. Use format "[{author}] [fact]"."""}],
         self.messages.append({"role": "assistant", "content": answer})
         print(f"DEBUG output: {answer} ")
         print(f"DEBUG: Adding memory with timestamp: {datetime.now().isoformat()}")
+        facts = [f.strip() for f in content_text.split('\n') if f.strip()]
         
-        # Extract and filter facts - only store meaningful ones
-        facts = [f.strip() for f in content_text.split('\n') if f.strip() and f.strip() != "SKIP"]
-        
-        print(f"DEBUG valid facts to store: {facts}")
         for fact in facts:
+            poignancy = client.chat.completions.create(
+                model = "local",
+                messages = [{"role": "user", "content": f"""On the scale of 1 to 10, where 1 is purely mundane
+                    (e.g., greeting) and 10 is
+                    extremely poignant (e.g., a break up, college
+                    acceptance), rate the likely poignancy of the
+                    following piece of memory.
+                    Memory: {fact}
+                    Rating: <fill in>"""
+                    }],
+                temperature = 0
+                )
+            poignancy = "".join([char for char in poignancy.choices[0].message.content if char.isdigit()])
             m.memory.add(
                 messages = [{"role": "user", "content": fact}], 
-                metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat()}, 
-                user_id = author.replace(" ", "_"),
-                infer = False
+                metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat(), "S": 1.0, "poignancy": float(poignancy)}, 
+                user_id=author.replace(" ", "_"),
+                infer = True
                 )
         #retention = e^-t/S, S=36.716, while t is in minutes
         
@@ -152,7 +161,7 @@ Extract facts, one per line. Use format "[{author}] [fact]"."""}],
             print(f"Error in async memory update: {e}")
     async def form_episodic_memory(self, user):
         prompt =[]
-        prompt.append({"role": "system", "content": f"""Lumo is an AI who interacts with users on the messaging app Discord. You create the episodic memory of Lumo. Write in the third-person perspective.
+        prompt.append({"role": "system", "content": f"""Lumo is someone who interacts with users on the messaging app Discord. You create the episodic memory of Lumo. Write in the third-person perspective.
             You will be given a past section of a conversation, 
             and your task is to create the episodic memory that will be recalled for future use. Summaries should be concise, output ONLY the memory
             Keep episodic memories to 1-3 sentences. You can describe emotions, tone, and personality traits, but don't pad it with irrelevant details.
@@ -162,11 +171,24 @@ Extract facts, one per line. Use format "[{author}] [fact]"."""}],
             
                         
             
-            Here is the conversation segment: {self.messages[-10:]}"""})
+            Here is the conversation segment: {self.messages[-20:]}"""})
         episode = client.chat.completions.create(
             model = "local",
             messages = prompt,
             temperature = 0 #idea: change the temperature based on mood
         )
+        poignancy = client.chat.completions.create(
+            model = "local",
+            messages = [{"role": "user", "content": f"""On the scale of 1 to 10, where 1 is purely mundane
+                (e.g., greeting) and 10 is
+                extremely poignant (e.g., a break up, college
+                acceptance), rate the likely poignancy of the
+                following piece of memory.
+                Memory: {episode.choices[0].message.content}
+                Rating: <fill in>"""
+                }],
+            temperature = 0
+        )
+        poignancy = "".join([char for char in poignancy.choices[0].message.content if char.isdigit()])
         print(f"DEBUG episodic memory output: {episode.choices[0].message.content}")
-        m.memory.add(messages = [{"role": "user", "content": episode.choices[0].message.content}], metadata = {"type": "episodic", "retention": 1.0, "S": 1.0,"timestamp": datetime.now().isoformat()}, user_id = user.replace(" ", "_"), infer = False)
+        m.memory.add(messages = [{"role": "user", "content": episode.choices[0].message.content}], metadata = {"type": "episodic", "retention": 1.0, "S": 1.0,"timestamp": datetime.now().isoformat(), "poignancy": float(poignancy)}, user_id = user.replace(" ", "_"), infer = False)

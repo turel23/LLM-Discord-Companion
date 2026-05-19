@@ -7,15 +7,14 @@ config = {
     "llm": {"provider": "lmstudio"},
     "embedder": {
         "provider": "lmstudio",
-        "config": {
-            "embedding_dims": 384,  # bge-small uses 384 dimensions
-        },
+        "config": {"embedding_dims": 384},
+        "compression_type": "binary",
     },
     "vector_store": {
         "provider": "qdrant",
         "config": {
             "collection_name": "mem0_local",
-            "embedding_model_dims": 384,  # MUST match embedder - bge-small is 384
+            "embedding_model_dims": 384,     # MUST match embedder
             "path": "./mem_db",
         },
     },
@@ -29,9 +28,9 @@ class MemoryManage:
             timestamp = datetime.fromisoformat(timestamp)
         # Make datetime.now() aware (UTC)
         now = datetime.now(timestamp.tzinfo) if timestamp.tzinfo else datetime.now()
-        return math.e**(-(now - timestamp).total_seconds()/(60*36.716*S))
-    def retrieve_relevant(self, query, top_k = 50, user_id = ""):
-        relevant = self.memory.search(query, top_k = top_k, filters = {"user_id": user_id})
+        return math.e**(-(now - timestamp).total_seconds()/(60*86.56*S))
+    def retrieve_relevant(self, query, top_k: int, user_id = ""):
+        relevant = self.memory.search(query, limit = top_k, filters = {})
         
         print(f"DEBUG mem0 raw search results for query '{query}':")
         for i, doc in enumerate(relevant["results"][:5]):  # Show first 5
