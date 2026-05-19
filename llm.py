@@ -12,6 +12,7 @@ client = OpenAI(base_url="http://localhost:1234/v1", api_key="placeholder")
 character = {"role": "system", "content": main_prompt + """Throughout the conversation, you will recieve memories with the time elapsed since then do NOT add your own time, e.g. no "(from X minutes ago)"."""}
 messages = []
 messages.append(character)
+
 m = MemoryManager()
 
 """Going to add a thinking layer, so they flow is passing text through as a query and pulling in content, 
@@ -120,7 +121,7 @@ class llm:
             messages = [{"role": "user", "content": content_text}], 
             metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat(), "S": 1.0}, 
             user_id=author.replace(" ", "_"),
-            infer = False
+            infer = True
             )
         #retention = e^-t/S, S=36.716, while t is in minutes
         return answer
