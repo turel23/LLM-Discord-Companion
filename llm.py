@@ -116,12 +116,13 @@ class llm:
         print(f"DEBUG output: {answer} ")
         print(f"DEBUG: Adding memory with timestamp: {datetime.now().isoformat()}")
         facts = [f.strip() for f in content_text.split('\n') if f.strip()]
-        m.memory.add(
-            messages = [{"role": "user", "content": content_text}], 
-            metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat()}, 
-            user_id=author.replace(" ", "_"),
-            infer = False
-            )
+        for fact in facts:
+            m.memory.add(
+                messages = [{"role": "user", "content": fact}], 
+                metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat()}, 
+                user_id=author.replace(" ", "_"),
+                infer = False
+                )
         #retention = e^-t/S, S=36.716, while t is in minutes
         return answer
     async def form_episodic_memory(self, user):

@@ -46,8 +46,9 @@ class MemoryManage:
             if random.random() < 0.3:
                 self.memory.update(memory_id=doc["id"], data=doc["memory"], metadata={"retention": 1.0})
         
-        past_semantic = [doc["memory"] for doc in relevant["results"] if doc["metadata"].get("type") == "semantic"]
-        past_episodic = [doc["memory"] for doc in relevant["results"] if doc["metadata"].get("type") == "episodic"]
+        results = relevant.copy()
+        past_semantic = [doc["memory"] for doc in results["results"] if doc["metadata"].get("type") == "semantic"]
+        past_episodic = [doc["memory"] for doc in results["results"] if doc["metadata"].get("type") == "episodic"]
         return past_semantic, past_episodic
     #to implement comrpession of memory
     def compressed_memory(self, text, retention):
