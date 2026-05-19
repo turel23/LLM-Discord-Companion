@@ -17,5 +17,4 @@ class Thinking:
         )
         memories = self.memory.retrieve_memories(query = thought.choices[0].message.content, top_k = 3, filters = {})
 
-        return thought.choices[0].message.content
-        
+        return thought.choices[0].message.content + " memories relevant to thoughts: " + " | ".join(memories["results"])

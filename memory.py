@@ -47,7 +47,7 @@ class MemoryManage:
         # Refresh some memories (boost retention)
         for doc in relevant["results"]:
             if random.random() < 0.3:
-                self.memory.update(memory_id=doc["id"], data=doc["memory"], metadata={"retention": 1.0, "S": doc["metadata"].get("S", 1.0) * 1.5}, created_at = datetime.now().isoformat())
+                self.memory.update(memory_id = doc["id"], data = doc["memory"], metadata={"retention": 1.0, "S": doc["metadata"].get("S", 1.0) * 1.5}, created_at = datetime.now().isoformat())
         
         past_semantic = [doc["memory"] for doc in relevant["results"] if doc["metadata"].get("type") == "semantic"]
         past_episodic = [doc["memory"] for doc in relevant["results"] if doc["metadata"].get("type") == "episodic"]
