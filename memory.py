@@ -29,7 +29,7 @@ class MemoryManage:
         # Make datetime.now() aware (UTC)
         now = datetime.now(timestamp.tzinfo) if timestamp.tzinfo else datetime.now()
         return math.e**(-(now - timestamp).total_seconds()/(60*36.716*S))
-    def retrieve_relevant(self, query, top_k = 50, user_id = ""):
+    def retrieve_relevant(self, query, top_k: int, user_id = ""):
         relevant = self.memory.search(query, limit = top_k, filters = {})
         
         for doc in relevant["results"]:

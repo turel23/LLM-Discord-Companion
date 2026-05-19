@@ -1,6 +1,7 @@
 import random
 
 from memory import MemoryManage as m
+from llm import llm
 
 class Sleep:
     @staticmethod
@@ -18,5 +19,13 @@ class Sleep:
                 selected_memories.append(mem)
 
         return selected_memories
-    def sleep_cycle():
-        
+    def sleep_cycle(memories):
+        for mem in memories:
+            results = m.memory.search(query = mem["memory"], limit = 3, filters = {})
+            results["results"].join(" | ")
+            output_sem = llm.chat.completions.create() #create a semantic memory
+            output_episodic = llm.chat.completions.create() #create an episodic memory
+            m.memory.add(output_sem)
+            m.memory.add(output_episodic)
+
+

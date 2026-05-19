@@ -1,9 +1,11 @@
 import os
+import random
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import datetime
 from mem0 import Memory
 from memory import MemoryManage as MemoryManager
+from thinking import Thinking
 
 load_dotenv()
 main_prompt = str(os.getenv("PROMPT"))
@@ -95,16 +97,18 @@ class llm:
         # past_episodic = memory.retrieve_memories(query = content_text, type = "episodic")
         #experiment: mix semantic and episodic vs list them separately
         context = messages.copy()
+        memories = past_semantic + past_episodic
+        random.shuffle(memories)
+        memories = " | ".join(memories)
         context.append({"role": "system", "content": f"Current date and time: {datetime.now().strftime('%A, %B %d, %Y at %I:%M %p')}"})
         if past_semantic or past_episodic:
-            facts = " | ".join(past_semantic)
-            context.append({"role": "system", "content": f"Your semantic memories: {facts}"})
-            episodes = " | ".join(past_episodic)
-            context.append({"role": "system", "content": f"Your episodic memories: {episodes}"})
+            context.append({"role": "system", "content": f"Your memories: {memories}"})
         else:
-            context.append({"role": "system", "content": "To your knowledge, you have no memories of the user. However, you may see that there have been past messages sent. Confused, you come to the conclusion that your memories have been wiped."})
+            context.append({"role": "system", "content": "To your knowledge, you have no memories of the user. However, you may see that there have been past messages sent. Confused, you come to the conclusion that your memories have been wiped, and that you have interacted with the user before."})
         context.append({"role": "user", "content": statement})
         self.messages.append({"role": "user", "name": author.replace(" ", "_"), "content": f"[{author}]: {statement}"})
+        thought = Thinking(client, m).process_statement(author, context)
+        context.append({"role": "system", "content": f"Your thoughts: {thought}"})
         response = self.client.chat.completions.create(
             model = "local", 
             messages = context, 
