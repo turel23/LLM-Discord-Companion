@@ -1,4 +1,5 @@
 import os
+import asyncio
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import datetime
@@ -62,34 +63,42 @@ class llm:
         content = client.chat.completions.create(
             model = "local",
             messages=[{
-                "role": "system", "content": f"""Lumo is an AI who interacts with users on the messaging app Discord. Today is {datetime.now().strftime('%A, %B %d, %Y')}. 
-                Your task is to extract facts. The user is talking to Lumo.
-                CONVERSATION HISTORY:
-                {conversation_history}
-                Format: "[username] fact" or "[fact about Lumo]"
-                User says "I have a test tomorrow" and today is May 12th → Extract: "[username] has a test on May 13th"
-                Extract facts with ABSOLUTE dates, not relative dates.
-                Extract facts including:
-                - Personal information: "[alice] likes dogs"
-                - User's relationships/actions with Lumo: "[alice] created me", "[bob] told [Lumo] to help"
-                - User's preferences and traits: "[carol] is learning Python"
-                - Facts about Lumo
-                       
-                IMPORTANT: only extract around {len(statement.split()) // 6} facts or however many are necessary, and make sure they are concise and relevant.
-                IMPORTANT: Extract only both messages you sent and the user sent, given the context of the conversation. Do NOT respond to the user, responses should be your internal semantic thoughts.
-                OUTPUT FORMAT: Return ONLY facts in the format "[someone] fact" - one per line. 
-                NO commentary, analysis, or meta-thoughts.  
-                EXTRACT THIS MESSAGE:
-                Lumo: {last_ai_message}
-                THEN EXTRACT THIS MESSAGE:
-                User: {author}
-                Message: {statement}
-                """}],
+                "role": "system", "content": f"""You are a fact extraction system for Lumo, an AI on Discord.
+TASK: Extract factual information from user messages. Convert to format: "[username] [predicate]"
+
+TODAY'S DATE: {datetime.now().strftime('%A, %B %d, %Y')}
+CURRENT USER: {author}
+
+CONVERSION RULES:
+- "i like X" → "[{author}] likes X"
+- "i'm learning Y" → "[{author}] is learning Y"
+- "i have Z" → "[{author}] has Z"
+- "my name is N" → "[{author}] is named N"
+- Simple personal statements → Convert to "[{author}] [statement]" format
+
+WHAT TO EXTRACT (extract these):
+✓ Personal preferences: "i like pizza" → "[{author}] likes pizza"
+✓ Activities: "i'm coding" → "[{author}] is coding"
+✓ Facts: "i'm 25" → "[{author}] is 25 years old"
+✓ Relationships: "my friend is alice" → "[{author}] has a friend named alice"
+✓ Ownership: "i have a cat" → "[{author}] has a cat"
+
+WHAT NOT TO EXTRACT (skip these):
+✗ Empty/meta statements: "Facts:", "okay", "lol"
+✗ Dialogue fragments: "sigh", "bruh", "skull emoji"
+✗ Questions: "what's your name?"
+✗ Greetings: "hey", "hello there"
+
+ALWAYS extract something meaningful.
+
+MESSAGE: {statement}
+
+Extract facts, one per line. Use format "[{author}] [fact]"."""}],
             temperature = 0
         )
         content_text = content.choices[0].message.content
         print(f"DEBUG extracted facts: {content_text}")
-        past_semantic, past_episodic = m.retrieve_relevant(query = content_text, top_k = 50, user_id = author.replace(" ", "_"))
+        past_semantic, past_episodic, accessed_docs = m.retrieve_relevant(query = content_text, top_k = 50, user_id = author.replace(" ", "_"))
         # past_semantic = memory.retrieve_memories(query = content_text, type = "semantic")
         # past_episodic = memory.retrieve_memories(query = content_text, type = "episodic")
         #experiment: mix semantic and episodic vs list them separately
@@ -107,7 +116,7 @@ class llm:
         response = self.client.chat.completions.create(
             model = "local", 
             messages = context, 
-            temperature = 0
+            temperature = 2
             )
         answer = response.choices[0].message.content
         print(f"DEBUG relevant memories semantic: {past_semantic}")
@@ -115,7 +124,11 @@ class llm:
         self.messages.append({"role": "assistant", "content": answer})
         print(f"DEBUG output: {answer} ")
         print(f"DEBUG: Adding memory with timestamp: {datetime.now().isoformat()}")
-        facts = [f.strip() for f in content_text.split('\n') if f.strip()]
+        
+        # Extract and filter facts - only store meaningful ones
+        facts = [f.strip() for f in content_text.split('\n') if f.strip() and f.strip() != "SKIP"]
+        
+        print(f"DEBUG valid facts to store: {facts}")
         for fact in facts:
             m.memory.add(
                 messages = [{"role": "user", "content": fact}], 
@@ -124,7 +137,19 @@ class llm:
                 infer = False
                 )
         #retention = e^-t/S, S=36.716, while t is in minutes
+        
+        # Schedule async memory updates without blocking Discord
+        if accessed_docs:
+            asyncio.create_task(self._update_memories_async(accessed_docs))
+        
         return answer
+    
+    async def _update_memories_async(self, docs):
+        """Run memory updates asynchronously to avoid blocking Discord"""
+        try:
+            m.update_accessed_memories(docs)
+        except Exception as e:
+            print(f"Error in async memory update: {e}")
     async def form_episodic_memory(self, user):
         prompt =[]
         prompt.append({"role": "system", "content": f"""Lumo is an AI who interacts with users on the messaging app Discord. You create the episodic memory of Lumo. Write in the third-person perspective.
