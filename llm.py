@@ -67,33 +67,31 @@ class llm:
             model = "local",
             messages=[{
                 "role": "system", "content": f"""Lumo is an AI who interacts with users on the messaging app Discord. Today is {datetime.now().strftime('%A, %B %d, %Y')}. 
-                Your task is to extract facts. The user is talking to Lumo.
                 CONVERSATION HISTORY:
                 {conversation_history}
-                Format: "[fact about user]" or "[fact about Lumo]"
-                User says "I have a test tomorrow" and today is May 12th → Extract: "[insert name] has a test on May 13th"
                 Extract facts with ABSOLUTE dates, not relative dates.
-                Extract facts including:
-                - Personal information: "[alice] likes dogs"
-                - User's relationships/actions with Lumo: "[alice] created me", "[bob] told [Lumo] to help"
-                - User's preferences and traits: "[carol] is learning Python"
-                - Facts about Lumo
-                       
-                IMPORTANT: only extract around {len(statement.split()) // 6} facts or however many are necessary, and make sure they are concise and relevant.
-                IMPORTANT: Extract only both messages you sent and the user sent, given the context of the conversation. Do NOT respond to the user, responses should be purely factual.
-                OUTPUT FORMAT: Return ONLY facts in the format "[someone] [insert fact]" - one per line. 
-                NO commentary, analysis, or meta-thoughts.  
                 EXTRACT THIS MESSAGE:
                 Lumo: {last_ai_message}
-                THEN EXTRACT THIS MESSAGE:
                 User: {author}
                 Message: {statement}
+                What are some facts that can extracted? Without meta-thoughts, extract only extract around {len(statement.split()) // 6} short facts as necessary, being concise and relevant. Only output facts, each fact on a new line.
                 """}],
             temperature = 0
         )
         content_text = content.choices[0].message.content
-        print(f"DEBUG extracted facts: {content_text}")
-        past_semantic, past_episodic, accessed_docs = m.retrieve_relevant(query = content_text, top_k = 50, user_id = author.replace(" ", "_"))
+        print(f"DEBUG extracted facts: {content_text.split('\n')}")
+        
+        # Split facts and retrieve memories for each one
+        facts = [f.strip() for f in content_text.split('\n') if f.strip()]
+        past_semantic = []
+        past_episodic = []
+        accessed_docs = []
+        
+        for fact in facts:
+            semantic, episodic, docs = m.retrieve_relevant(query=fact, top_k=10, user_id=author.replace(" ", "_"))
+            past_semantic.extend(semantic)
+            past_episodic.extend(episodic)
+            accessed_docs.extend(docs)
         # past_semantic = memory.retrieve_memories(query = content_text, type = "semantic")
         # past_episodic = memory.retrieve_memories(query = content_text, type = "episodic")
         #experiment: mix semantic and episodic vs list them separately
@@ -125,33 +123,49 @@ class llm:
         print(f"DEBUG: Adding memory with timestamp: {datetime.now().isoformat()}")
         facts = [f.strip() for f in content_text.split('\n') if f.strip()]
         
-        for fact in facts:
-            poignancy = client.chat.completions.create(
-                model = "local",
-                messages = [{"role": "user", "content": f"""On the scale of 1 to 10, where 1 is purely mundane
-                    (e.g., greeting) and 10 is
-                    extremely poignant (e.g., a break up, college
-                    acceptance), rate the likely poignancy of the
-                    following piece of memory.
-                    Memory: {fact}
-                    Rating: <fill in>"""
-                    }],
-                temperature = 0
-                )
-            poignancy = "".join([char for char in poignancy.choices[0].message.content if char.isdigit()])
-            m.memory.add(
-                messages = [{"role": "user", "content": fact}], 
-                metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat(), "S": 1.0, "poignancy": float(poignancy)}, 
-                user_id=author.replace(" ", "_"),
-                infer = True
-                )
-        #retention = e^-t/S, S=36.716, while t is in minutes
+        # Schedule async memory storage with poignancy ratings
+        if facts:
+            asyncio.create_task(self._store_facts_async(facts, author))
         
         # Schedule async memory updates without blocking Discord
         if accessed_docs:
             asyncio.create_task(self._update_memories_async(accessed_docs))
         
         return answer
+    
+    async def _store_facts_async(self, facts, author):
+        """Store facts with poignancy ratings asynchronously"""
+        for fact in facts:
+            try:
+                # Get poignancy rating in thread pool
+                def rate_poignancy():
+                    return client.chat.completions.create(
+                        model = "local",
+                        messages = [{"role": "user", "content": f"""On the scale of 1 to 10, where 1 is purely mundane
+                            (e.g., greeting) and 10 is
+                            extremely poignant (e.g., a break up, college
+                            acceptance), rate the likely poignancy of the
+                            following piece of memory.
+                            Memory: {fact}
+                            Rating: <fill in>"""
+                            }],
+                        temperature = 0
+                    )
+                
+                poignancy_response = await asyncio.to_thread(rate_poignancy)
+                poignancy = "".join([char for char in poignancy_response.choices[0].message.content if char.isdigit()])
+                if not poignancy:
+                    poignancy = "5"  # Default to neutral if no digit found
+                
+                # Store the fact
+                m.memory.add(
+                    messages = [{"role": "user", "content": fact}], 
+                    metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat(), "S": 1.0, "poignancy": float(poignancy)}, 
+                    user_id=author.replace(" ", "_"),
+                    infer = True
+                )
+            except Exception as e:
+                print(f"Error storing fact '{fact}': {e}")
     
     async def _update_memories_async(self, docs):
         """Run memory updates asynchronously to avoid blocking Discord"""
@@ -160,35 +174,56 @@ class llm:
         except Exception as e:
             print(f"Error in async memory update: {e}")
     async def form_episodic_memory(self, user):
-        prompt =[]
-        prompt.append({"role": "system", "content": f"""Lumo is someone who interacts with users on the messaging app Discord. You create the episodic memory of Lumo. Write in the third-person perspective.
-            You will be given a past section of a conversation, 
-            and your task is to create the episodic memory that will be recalled for future use. Summaries should be concise, output ONLY the memory
-            Keep episodic memories to 1-3 sentences. You can describe emotions, tone, and personality traits, but don't pad it with irrelevant details.
-            Dialogue marked with "role": "assistant" are the responses you gave, and "role": "user" are the messages from the user.
-            Example: "[alice] and [Lumo] talked about our day and we got along well."
-            Example: "[Lumo] found out that [bob] is their creator and [Lumo] is grateful for that."
+        """Create episodic memory asynchronously"""
+        try:
+            # Generate episodic summary in thread pool
+            def create_episode():
+                prompt = [{
+                    "role": "system", 
+                    "content": f"""Lumo is someone who interacts with users on the messaging app Discord. You create the episodic memory of Lumo. Write in the third-person perspective.
+                    You will be given a past section of a conversation, and your task is to create the episodic memory that will be recalled for future use. Summaries should be concise, output ONLY the memory.
+                    Keep episodic memories to 1-3 sentences. You can describe emotions, tone, and personality traits, but don't pad it with irrelevant details.
+                    Dialogue marked with "role": "assistant" are the responses you gave, and "role": "user" are the messages from the user.
+                    Example: "[alice] and [Lumo] talked about our day and we got along well."
+                    Example: "[Lumo] found out that [bob] is their creator and [Lumo] is grateful for that."
+                    
+                    Here is the conversation segment: {self.messages[-20:]}"""
+                }]
+                return client.chat.completions.create(
+                    model = "local",
+                    messages = prompt,
+                    temperature = 0
+                )
             
-                        
+            episode_response = await asyncio.to_thread(create_episode)
+            episode_text = episode_response.choices[0].message.content
             
-            Here is the conversation segment: {self.messages[-20:]}"""})
-        episode = client.chat.completions.create(
-            model = "local",
-            messages = prompt,
-            temperature = 0 #idea: change the temperature based on mood
-        )
-        poignancy = client.chat.completions.create(
-            model = "local",
-            messages = [{"role": "user", "content": f"""On the scale of 1 to 10, where 1 is purely mundane
-                (e.g., greeting) and 10 is
-                extremely poignant (e.g., a break up, college
-                acceptance), rate the likely poignancy of the
-                following piece of memory.
-                Memory: {episode.choices[0].message.content}
-                Rating: <fill in>"""
-                }],
-            temperature = 0
-        )
-        poignancy = "".join([char for char in poignancy.choices[0].message.content if char.isdigit()])
-        print(f"DEBUG episodic memory output: {episode.choices[0].message.content}")
-        m.memory.add(messages = [{"role": "user", "content": episode.choices[0].message.content}], metadata = {"type": "episodic", "retention": 1.0, "S": 1.0,"timestamp": datetime.now().isoformat(), "poignancy": float(poignancy)}, user_id = user.replace(" ", "_"), infer = False)
+            # Rate poignancy in thread pool
+            def rate_episode():
+                return client.chat.completions.create(
+                    model = "local",
+                    messages = [{"role": "user", "content": f"""On the scale of 1 to 10, where 1 is purely mundane
+                        (e.g., greeting) and 10 is
+                        extremely poignant (e.g., a break up, college
+                        acceptance), rate the likely poignancy of the
+                        following piece of memory.
+                        Memory: {episode_text}
+                        Rating: <fill in>"""
+                        }],
+                    temperature = 0
+                )
+            
+            poignancy_response = await asyncio.to_thread(rate_episode)
+            poignancy = "".join([char for char in poignancy_response.choices[0].message.content if char.isdigit()])
+            if not poignancy:
+                poignancy = "5"
+            
+            print(f"DEBUG episodic memory output: {episode_text}")
+            m.memory.add(
+                messages = [{"role": "user", "content": episode_text}], 
+                metadata = {"type": "episodic", "retention": 1.0, "S": 1.0, "timestamp": datetime.now().isoformat(), "poignancy": float(poignancy)}, 
+                user_id = user.replace(" ", "_"), 
+                infer = False
+            )
+        except Exception as e:
+            print(f"Error forming episodic memory: {e}")

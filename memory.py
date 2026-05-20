@@ -4,17 +4,29 @@ from datetime import datetime
 import random
 
 config = {
-    "llm": {"provider": "lmstudio"},
+    "llm": {
+        "provider": "lmstudio",
+        "config": {
+            "lmstudio_base_url": "http://localhost:1234/v1",
+            "lmstudio_response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "type": "object",
+                    "schema": {}
+                }
+            },
+        }
+        },
     "embedder": {
         "provider": "lmstudio",
-        "config": {"embedding_dims": 384},
+        "config": {"embedding_dims": 768},
         "compression_type": "binary",
     },
     "vector_store": {
         "provider": "qdrant",
         "config": {
             "collection_name": "mem0_local",
-            "embedding_model_dims": 384,     # MUST match embedder
+            "embedding_model_dims": 768,    
             "path": "./mem_db",
         },
     },
@@ -30,7 +42,7 @@ class MemoryManage:
         now = datetime.now(timestamp.tzinfo) if timestamp.tzinfo else datetime.now()
         return math.e**(-(now - timestamp).total_seconds()/(60*86.56*S))
     def retrieve_relevant(self, query, top_k: int, user_id = ""):
-        relevant = self.memory.search(query, limit = top_k, filters = {})
+        relevant = self.memory.search(query, limit = top_k, filters = {"user_id": "global"})
         
         print(f"DEBUG mem0 raw search results for query '{query}':")
         for i, doc in enumerate(relevant["results"][:5]):  # Show first 5
