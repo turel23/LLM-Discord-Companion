@@ -53,9 +53,12 @@ class MemoryManage:
         accessed_docs = []
         for doc in relevant["results"]:
             retention = self.calculate_retention(doc["created_at"], doc["metadata"].get("S", 1.0))
-            if retention >= 0.02:  # Keep memories with retention >= 0.02
-                filtered_results.append(doc)
-                accessed_docs.append(doc)  # Return full doc for async update
+            if retention < 0.02:
+                self.memory.delete(memory_id=doc["id"])
+                continue
+
+            filtered_results.append(doc)
+            accessed_docs.append(doc)  # Return full doc for async update
         
         # Return filtered memories by type, plus docs for async update
         past_semantic = [doc["memory"] for doc in filtered_results if doc["metadata"].get("type") == "semantic"]
