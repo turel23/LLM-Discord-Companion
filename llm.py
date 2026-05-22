@@ -4,7 +4,6 @@ import asyncio
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import datetime
-from mem0 import Memory
 from memory import MemoryManage as MemoryManager
 from thinking import Thinking
 
@@ -88,7 +87,9 @@ class llm:
         accessed_docs = []
         
         for fact in facts:
-            semantic, episodic, docs = m.retrieve_relevant(query=fact, top_k=10, user_id=author.replace(" ", "_"))
+            semantic, episodic, docs = await m.retrieve_relevant(
+                query=fact, top_k=10, user_id=author.replace(" ", "_")
+            )
             past_semantic.extend(semantic)
             past_episodic.extend(episodic)
             accessed_docs.extend(docs)
@@ -106,7 +107,7 @@ class llm:
             context.append({"role": "system", "content": "To your knowledge, you have no memories of the user. However, you may see that there have been past messages sent. Confused, you come to the conclusion that your memories have been wiped, and that you have interacted with the user before."})
         context.append({"role": "user", "content": statement})
         self.messages.append({"role": "user", "name": author.replace(" ", "_"), "content": f"[{author}]: {statement}"})
-        thought, memories = Thinking(client, m).process_statement(author, context)
+        thought, memories = await Thinking(client, m).process_statement(author, context)
         context.append({"role": "system", "content": f"Your thoughts and plans: {thought}"})
         context.append({"role": "system", "content": f"Relevant memories to the thoughts: {memories}"})
         context.append({"role": "system", "content": "Given the above information, create a response for what message you will text on Discord."})
@@ -158,11 +159,13 @@ class llm:
                     poignancy = "5"  # Default to neutral if no digit found
                 
                 # Store the fact
-                m.memory.add(
-                    messages = [{"role": "user", "content": fact}], 
-                    metadata = {"type": "semantic", "retention": 1.0, "timestamp": datetime.now().isoformat(), "S": 1.0, "poignancy": float(poignancy)}, 
-                    user_id=author.replace(" ", "_"),
-                    infer = True
+                await m.add_memory(
+                    name=fact[:80] or "Semantic memory",
+                    episode_body=fact,
+                    source="text",
+                    source_description=f"Extracted semantic memory, poignancy={poignancy}",
+                    group_id=author.replace(" ", "_"),
+                    reference_time=datetime.now().astimezone(),
                 )
             except Exception as e:
                 print(f"Error storing fact '{fact}': {e}")
@@ -170,7 +173,7 @@ class llm:
     async def _update_memories_async(self, docs):
         """Run memory updates asynchronously to avoid blocking Discord"""
         try:
-            m.update_accessed_memories(docs)
+            await m.update_accessed_memories(docs)
         except Exception as e:
             print(f"Error in async memory update: {e}")
     async def form_episodic_memory(self, user):
@@ -219,11 +222,13 @@ class llm:
                 poignancy = "5"
             
             print(f"DEBUG episodic memory output: {episode_text}")
-            m.memory.add(
-                messages = [{"role": "user", "content": episode_text}], 
-                metadata = {"type": "episodic", "retention": 1.0, "S": 1.0, "timestamp": datetime.now().isoformat(), "poignancy": float(poignancy)}, 
-                user_id = user.replace(" ", "_"), 
-                infer = False
+            await m.add_memory(
+                name="Conversation memory",
+                episode_body=episode_text,
+                source="message",
+                source_description=f"Episodic memory, poignancy={poignancy}",
+                group_id=user.replace(" ", "_"),
+                reference_time=datetime.now().astimezone(),
             )
         except Exception as e:
             print(f"Error forming episodic memory: {e}")

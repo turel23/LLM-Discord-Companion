@@ -16,6 +16,9 @@ Trying to implement the Stanford smallville paper "Generative Agents: Interactiv
 
 You need a Discord bot, as well as your token and server Guild ID.
 Clone it onto your local computer, and create a .env following the example. Install requirements.txt:
-`pip install > requirements.txt`
+`pip install -r requirements.txt`
+
+For memory, this build now uses Graphiti from Zep. Run Graphiti locally and set `GRAPHITI_URI`, `GRAPHITI_USER`, and `GRAPHITI_PASSWORD` in your `.env` file if you are not using the defaults.
+
 Then run the code using
 `python main.py`

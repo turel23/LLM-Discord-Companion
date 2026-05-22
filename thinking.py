@@ -8,7 +8,7 @@ class Thinking:
         self.memory = memory
         self.messages = []
     
-    def process_statement(self, author, context):
+    async def process_statement(self, author, context):
         prompt = os.getenv("PROMPT")
         context.append({"role": "system", "content": prompt})
         context.append(
@@ -20,9 +20,10 @@ class Thinking:
             messages = context, 
             temperature = 0
         )
-        past_semantic, past_episodic, accessed_docs = self.memory.retrieve_relevant(query = thought.choices[0].message.content, top_k = 3, user_id = "global")
+        past_semantic, past_episodic, accessed_docs = await self.memory.retrieve_relevant(
+            query = thought.choices[0].message.content, top_k = 3, user_id = "global"
+        )
         memories = past_semantic + past_episodic
         random.shuffle(memories)
         memories_text = " | ".join(memories)
-        return "I think that the user's favorite food is nice, and i will tell them that I think it is alright. I will tell the user that i enjoy eating chocolate cake"
         return thought.choices[0].message.content, " memories relevant to thoughts: " + memories_text

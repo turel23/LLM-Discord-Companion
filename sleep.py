@@ -1,14 +1,11 @@
 import random
 
 from memory import MemoryManage as m
-from llm import llm
 
 class Sleep:
     @staticmethod
-    def pull_memories():
-        memories = m.memory.get_all(filters={})
-        if isinstance(memories, dict):
-            memories = memories.get("results", [])
+    async def pull_memories(group_id: str = "global", limit: int = 50):
+        memories = await m.list_memories(user_id=group_id, limit=limit)
 
         selected_memories = []
 
@@ -19,11 +16,14 @@ class Sleep:
                 selected_memories.append(mem)
 
         return selected_memories
-    def sleep_cycle(memories):
+
+    @staticmethod
+    async def sleep_cycle(memories, group_id: str = "global"):
+        reflections = []
         for mem in memories:
-            results = m.memory.search(query = mem["memory"], limit = 3, filters = {})
-            results["results"].join(" | ")
-            reflection = llm.chat.completions.create()
-            m.memory.add()
+            results = await m.retrieve_relevant(query=mem["memory"], top_k=3, user_id=group_id)
+            reflections.append({"memory": mem, "related": results})
+
+        return reflections
 
 
