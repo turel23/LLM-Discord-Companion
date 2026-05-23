@@ -78,10 +78,11 @@ class llm:
             temperature = 0
         )
         content_text = content.choices[0].message.content
-        print(f"DEBUG extracted facts: {content_text.split('\n')}")
+        split_text = content_text.split('\n')
+        print(f"DEBUG extracted facts: {split_text}")
         
         # Split facts and retrieve memories for each one
-        facts = [f.strip() for f in content_text.split('\n') if f.strip()]
+        facts = [f.strip() for f in split_text if f.strip()]
         past_semantic = []
         past_episodic = []
         accessed_docs = []
@@ -158,24 +159,25 @@ class llm:
                 if not poignancy:
                     poignancy = "5"  # Default to neutral if no digit found
                 
-                # Store the fact
+                # Store the fact to Neo4j
                 await m.add_memory(
-                    name=fact[:80] or "Semantic memory",
-                    episode_body=fact,
-                    source="text",
-                    source_description=f"Extracted semantic memory, poignancy={poignancy}",
-                    group_id=author.replace(" ", "_"),
-                    reference_time=datetime.now().astimezone(),
+                    content=fact,
+                    memory_type="semantic",
+                    metadata={
+                        "type": "semantic",
+                        "poignancy": float(poignancy),
+                        "author": author,
+                        "timestamp": datetime.now().isoformat()
+                    }
                 )
             except Exception as e:
                 print(f"Error storing fact '{fact}': {e}")
     
     async def _update_memories_async(self, docs):
         """Run memory updates asynchronously to avoid blocking Discord"""
-        try:
-            await m.update_accessed_memories(docs)
-        except Exception as e:
-            print(f"Error in async memory update: {e}")
+        # Neo4j handles all memory updates automatically
+        # No additional processing needed
+        pass
     async def form_episodic_memory(self, user):
         """Create episodic memory asynchronously"""
         try:

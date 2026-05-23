@@ -1,0 +1,20 @@
+[store]
+type = "postgres"
+
+[store.postgres]
+connection_string = "postgresql://zep:zep@zep-postgres:5432/zep"
+
+[llm]
+provider = "custom"
+
+[llm.custom]
+server_url = "http://host.docker.internal:1234/v1"
+
+[embedder]
+provider = "custom"
+
+[embedder.custom]
+server_url = "http://host.docker.internal:1235/v1"
+
+[auth]
+open_ai_api_key = "sk-dummy"
