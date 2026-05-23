@@ -79,7 +79,8 @@ class llm:
             temperature = 0
         )
         content_text = content.choices[0].message.content
-        print(f"DEBUG extracted facts: {content_text.split('\n')}")
+        facts = [f.strip() for f in content_text.split('\n') if f.strip()]
+        print(f"DEBUG extracted facts: {facts}")
         
         # Split facts and retrieve memories for each one
         facts = [f.strip() for f in content_text.split('\n') if f.strip()]
